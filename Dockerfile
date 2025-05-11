@@ -6,7 +6,13 @@ RUN apk add --no-cache \
     py3-pip \
     build-base \
     libjpeg-turbo-dev \
-    zlib-dev && \
+    zlib-dev \
+    freetype-dev \
+    lcms2-dev \
+    openjpeg-dev \
+    tiff-dev \
+    tk-dev \
+    tcl-dev && \
     pip3 install --no-cache-dir pillow
 
 # Set working directory
