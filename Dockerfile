@@ -1,27 +1,27 @@
-# Use Node base image with Debian base
-FROM node:18-slim
+# Use the official Node.js LTS image
+FROM node:18
 
-# Install Python 3 and pip
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip && \
-    pip3 install --no-cache-dir pillow && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
+# Set the working directory
 WORKDIR /app
 
-# Copy Node.js dependencies
+# Copy package.json and package-lock.json
 COPY package*.json ./
+
+# Install Node.js dependencies
 RUN npm install
 
-# Copy the full app
+# Install Python and Pillow
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip && \
+    pip3 install pillow && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the rest of the application code
 COPY . .
 
-# Create necessary folders
-RUN mkdir -p static uploads scripts public
+# Expose the port your app runs on
+EXPOSE 3000
 
-# Expose port for Easypanel
-EXPOSE 8081
-
-# Start the app
+# Start the application
 CMD ["node", "app.js"]
