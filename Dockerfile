@@ -1,4 +1,3 @@
-# Use Alpine-based Node image
 FROM node:18-alpine
 
 # Install Python 3, pip, and Pillow dependencies
@@ -6,7 +5,7 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     build-base \
-    jpeg-dev \
+    libjpeg-turbo-dev \
     zlib-dev && \
     pip3 install --no-cache-dir pillow
 
