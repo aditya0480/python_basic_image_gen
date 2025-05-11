@@ -1,27 +1,30 @@
-# Use the official Node.js LTS image
-FROM node:18
+# Use Alpine-based Node image
+FROM node:18-alpine
 
-# Set the working directory
+# Install Python 3, pip, and Pillow dependencies
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    build-base \
+    jpeg-dev \
+    zlib-dev && \
+    pip3 install --no-cache-dir pillow
+
+# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy Node.js dependencies and install
 COPY package*.json ./
-
-# Install Node.js dependencies
 RUN npm install
 
-# Install Python and Pillow
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip && \
-    pip3 install pillow && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy the rest of the application code
+# Copy the full app
 COPY . .
 
-# Expose the port your app runs on
-EXPOSE 3000
+# Create necessary folders
+RUN mkdir -p static uploads scripts public
 
-# Start the application
+# Expose port for Easypanel
+EXPOSE 8081
+
+# Start the app
 CMD ["node", "app.js"]
