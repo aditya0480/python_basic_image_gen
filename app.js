@@ -172,7 +172,7 @@ app.post('/api/upload-font', upload.single('font'), (req, res) => {
 });
 
 // Create the HTML file
-const htmlContent = `
+fs.writeFileSync(path.join(publicDir, 'index.html'), `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -503,10 +503,7 @@ fetch('/api/generate', {
     </script>
 </body>
 </html>
-`;
-
-// Write the HTML file
-fs.writeFileSync(path.join(publicDir, 'index.html'), htmlContent);
+`);
 
 // Routes
 app.get('/', (req, res) => {
