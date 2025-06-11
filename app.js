@@ -10,14 +10,17 @@ const morgan = require('morgan');
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 8081;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
-// Create necessary directories
+
+// Create necessary directories new
 const staticDir = path.join(__dirname, 'static');
 const uploadsDir = path.join(__dirname, 'uploads');
 const scriptsDir = path.join(__dirname, 'scripts');
-const publicDir = path.join(__dirname, 'public');
 
-[staticDir, uploadsDir, scriptsDir, publicDir].forEach(dir => {
+[staticDir, uploadsDir, scriptsDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -30,6 +33,7 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 import sys
 import json
+import urllib.request
 import base64
 from io import BytesIO
 
@@ -47,43 +51,46 @@ bg_color = tuple(data.get('bg_color', [0, 0, 0]))
 text_color = tuple(data.get('text_color', [255, 255, 255]))
 
 # Font path
-current_dir = os.getcwd()
-font_dir = 'static'
-font_filename = 'NotoSansDevanagari.ttf'
-font_path = os.path.join(current_dir, font_dir, font_filename)
+font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'static', 'NotoSansDevanagari.ttf')
+if not os.path.exists(font_path):
+    # Download font if it doesn't exist
+    print("Downloading font file...")
+    font_url = "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"
+    try:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(font_path), exist_ok=True)
+        urllib.request.urlretrieve(font_url, font_path)
+        print(f"Font downloaded to {font_path}")
+    except Exception as e:
+        print(f"Error downloading font: {e}")
+        font_path = None
 
 # Create image
 image = Image.new("RGB", (width, height), bg_color)
 draw = ImageDraw.Draw(image)
 
-# Try loading custom font
+# Try loading fonts with fallback options
 font = None
-if os.path.exists(font_path):
-    try:
-        font = ImageFont.truetype(font_path, size=font_size)
-        print(f"Successfully loaded custom font: {font_path}")
-    except Exception as e:
-        print(f"Failed to load custom font: {e}")
+font_paths = [
+    font_path,  # Our downloaded font
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Common on Ubuntu
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"  # Another option
+]
 
-# If custom font not available, try system fonts
-if font is None:
-    system_fonts = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
-    ]
-    for path in system_fonts:
-        if os.path.exists(path):
-            try:
-                font = ImageFont.truetype(path, size=font_size)
-                print(f"Successfully loaded system font: {path}")
-                break
-            except Exception as e:
-                print(f"Failed to load system font {path}: {e}")
+for path in font_paths:
+    if path and os.path.exists(path):
+        try:
+            font = ImageFont.truetype(path, size=font_size)
+            print(f"Successfully loaded font: {path}")
+            break
+        except Exception as e:
+            print(f"Failed to load font {path}: {e}")
 
 # If no font was loaded, use default
 if font is None:
     print("Warning: Could not load any specified font, using default")
     font = ImageFont.load_default()
+    # Try to scale up default font
     font_size = 18
 
 # Text formatting
@@ -171,7 +178,74 @@ app.post('/api/upload-font', upload.single('font'), (req, res) => {
   });
 });
 
-// Create the HTML file
+// Routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// API endpoint for image generation
+app.post('/api/generate', (req, res) => {
+  try {
+    const imageData = req.body;
+    const timestamp = Date.now();
+    const outputPath = path.join(staticDir, `generated-${timestamp}.png`);
+    
+    // Convert the request body to a JSON string to pass to Python
+    const inputJSON = JSON.stringify(imageData);
+    
+    // Spawn Python process
+    const pythonProcess = spawn('python3', [pythonScript, inputJSON, outputPath]);
+    
+    let pythonData = '';
+    let pythonError = '';
+    
+    pythonProcess.stdout.on('data', (data) => {
+      pythonData += data.toString();
+    });
+    
+    pythonProcess.stderr.on('data', (data) => {
+      pythonError += data.toString();
+    });
+    
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`Python process exited with code ${code}`);
+        console.error(pythonError);
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Error generating image',
+          details: pythonError
+        });
+      }
+      
+      // Extract base64 from Python output (last line)
+      const outputLines = pythonData.trim().split('\n');
+      const base64Image = outputLines[outputLines.length - 1];
+      
+      // Return success response with image details
+      res.json({
+        success: true,
+        image_url: `/static/generated-${timestamp}.png`,
+        image_base64: `data:image/png;base64,${base64Image}`,
+        timestamp: timestamp
+      });
+    });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error',
+      details: error.message
+    });
+  }
+});
+
+// Create the public HTML file for the web interface
+const publicDir = path.join(__dirname, 'public');
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
 fs.writeFileSync(path.join(publicDir, 'index.html'), `
 <!DOCTYPE html>
 <html lang="en">
@@ -286,6 +360,10 @@ fs.writeFileSync(path.join(publicDir, 'index.html'), `
             padding: 10px;
             border-radius: 4px;
             overflow-x: auto;
+        }
+        .font-status {
+            margin-top: 5px;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -504,70 +582,3 @@ fetch('/api/generate', {
 </body>
 </html>
 `);
-
-// Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(publicDir, 'index.html'));
-});
-
-// API endpoint for image generation
-app.post('/api/generate', (req, res) => {
-  try {
-    const imageData = req.body;
-    const timestamp = Date.now();
-    const outputPath = path.join(staticDir, `generated-${timestamp}.png`);
-    
-    // Convert the request body to a JSON string to pass to Python
-    const inputJSON = JSON.stringify(imageData);
-    
-    // Spawn Python process
-    const pythonProcess = spawn('python3', [pythonScript, inputJSON, outputPath]);
-    
-    let pythonData = '';
-    let pythonError = '';
-    
-    pythonProcess.stdout.on('data', (data) => {
-      pythonData += data.toString();
-    });
-    
-    pythonProcess.stderr.on('data', (data) => {
-      pythonError += data.toString();
-    });
-    
-    pythonProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`Python process exited with code ${code}`);
-        console.error(pythonError);
-        return res.status(500).json({ 
-          success: false, 
-          error: 'Error generating image',
-          details: pythonError
-        });
-      }
-      
-      // Extract base64 from Python output (last line)
-      const outputLines = pythonData.trim().split('\n');
-      const base64Image = outputLines[outputLines.length - 1];
-      
-      // Return success response with image details
-      res.json({
-        success: true,
-        image_url: `/static/generated-${timestamp}.png`,
-        image_base64: `data:image/png;base64,${base64Image}`,
-        timestamp: timestamp
-      });
-    });
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Server error',
-      details: error.message
-    });
-  }
-});
-
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
