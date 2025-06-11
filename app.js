@@ -10,17 +10,14 @@ const morgan = require('morgan');
 // Create Express app
 const app = express();
 const PORT = process.env.PORT || 8081;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
 
-
-// Create necessary directories new
+// Create necessary directories
 const staticDir = path.join(__dirname, 'static');
 const uploadsDir = path.join(__dirname, 'uploads');
 const scriptsDir = path.join(__dirname, 'scripts');
+const publicDir = path.join(__dirname, 'public');
 
-[staticDir, uploadsDir, scriptsDir].forEach(dir => {
+[staticDir, uploadsDir, scriptsDir, publicDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -33,7 +30,6 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 import sys
 import json
-import urllib.request
 import base64
 from io import BytesIO
 
@@ -175,75 +171,8 @@ app.post('/api/upload-font', upload.single('font'), (req, res) => {
   });
 });
 
-// Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// API endpoint for image generation
-app.post('/api/generate', (req, res) => {
-  try {
-    const imageData = req.body;
-    const timestamp = Date.now();
-    const outputPath = path.join(staticDir, `generated-${timestamp}.png`);
-    
-    // Convert the request body to a JSON string to pass to Python
-    const inputJSON = JSON.stringify(imageData);
-    
-    // Spawn Python process
-    const pythonProcess = spawn('python3', [pythonScript, inputJSON, outputPath]);
-    
-    let pythonData = '';
-    let pythonError = '';
-    
-    pythonProcess.stdout.on('data', (data) => {
-      pythonData += data.toString();
-    });
-    
-    pythonProcess.stderr.on('data', (data) => {
-      pythonError += data.toString();
-    });
-    
-    pythonProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error(`Python process exited with code ${code}`);
-        console.error(pythonError);
-        return res.status(500).json({ 
-          success: false, 
-          error: 'Error generating image',
-          details: pythonError
-        });
-      }
-      
-      // Extract base64 from Python output (last line)
-      const outputLines = pythonData.trim().split('\n');
-      const base64Image = outputLines[outputLines.length - 1];
-      
-      // Return success response with image details
-      res.json({
-        success: true,
-        image_url: `/static/generated-${timestamp}.png`,
-        image_base64: `data:image/png;base64,${base64Image}`,
-        timestamp: timestamp
-      });
-    });
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Server error',
-      details: error.message
-    });
-  }
-});
-
-// Create the public HTML file for the web interface
-const publicDir = path.join(__dirname, 'public');
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir, { recursive: true });
-}
-
-fs.writeFileSync(path.join(publicDir, 'index.html'), `
+// Create the HTML file
+const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -574,4 +503,74 @@ fetch('/api/generate', {
     </script>
 </body>
 </html>
-`);
+`;
+
+// Write the HTML file
+fs.writeFileSync(path.join(publicDir, 'index.html'), htmlContent);
+
+// Routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+// API endpoint for image generation
+app.post('/api/generate', (req, res) => {
+  try {
+    const imageData = req.body;
+    const timestamp = Date.now();
+    const outputPath = path.join(staticDir, `generated-${timestamp}.png`);
+    
+    // Convert the request body to a JSON string to pass to Python
+    const inputJSON = JSON.stringify(imageData);
+    
+    // Spawn Python process
+    const pythonProcess = spawn('python3', [pythonScript, inputJSON, outputPath]);
+    
+    let pythonData = '';
+    let pythonError = '';
+    
+    pythonProcess.stdout.on('data', (data) => {
+      pythonData += data.toString();
+    });
+    
+    pythonProcess.stderr.on('data', (data) => {
+      pythonError += data.toString();
+    });
+    
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`Python process exited with code ${code}`);
+        console.error(pythonError);
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Error generating image',
+          details: pythonError
+        });
+      }
+      
+      // Extract base64 from Python output (last line)
+      const outputLines = pythonData.trim().split('\n');
+      const base64Image = outputLines[outputLines.length - 1];
+      
+      // Return success response with image details
+      res.json({
+        success: true,
+        image_url: `/static/generated-${timestamp}.png`,
+        image_base64: `data:image/png;base64,${base64Image}`,
+        timestamp: timestamp
+      });
+    });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Server error',
+      details: error.message
+    });
+  }
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
