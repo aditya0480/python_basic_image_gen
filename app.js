@@ -142,41 +142,13 @@ app.use('/static', express.static(staticDir));
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    if (file.fieldname === 'font') {
-      cb(null, path.join(staticDir, 'fonts'));
-    } else {
-      cb(null, uploadsDir);
-    }
-  },
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    if (file.fieldname === 'font') {
-      cb(null, 'custom-font.ttf');
-    } else {
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-      cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 const upload = multer({ storage });
-
-// Create fonts directory
-const fontsDir = path.join(staticDir, 'fonts');
-if (!fs.existsSync(fontsDir)) {
-  fs.mkdirSync(fontsDir, { recursive: true });
-}
-
-// Font upload endpoint
-app.post('/api/upload-font', upload.single('font'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ success: false, error: 'No font file uploaded' });
-  }
-  res.json({ 
-    success: true, 
-    message: 'Font uploaded successfully',
-    fontPath: '/static/fonts/custom-font.ttf'
-  });
-});
 
 // Routes
 app.get('/', (req, res) => {
@@ -361,10 +333,6 @@ fs.writeFileSync(path.join(publicDir, 'index.html'), `
             border-radius: 4px;
             overflow-x: auto;
         }
-        .font-status {
-            margin-top: 5px;
-            font-size: 14px;
-        }
     </style>
 </head>
 <body>
@@ -377,12 +345,6 @@ fs.writeFileSync(path.join(publicDir, 'index.html'), `
                 <textarea id="text" name="text" required>kaash tum maut hote ek din ate zarur,
 Afsos, ki tum zindagi ho,
 chor kar jaogi zarur.</textarea>
-            </div>
-            
-            <div class="form-group">
-                <label for="fontFile">Upload Custom Font (TTF):</label>
-                <input type="file" id="fontFile" name="font" accept=".ttf" onchange="uploadFont(this)">
-                <p class="font-status" id="fontStatus"></p>
             </div>
             
             <div class="form-row">
@@ -465,37 +427,6 @@ fetch('/api/generate', {
             const generatedImage = document.getElementById('generatedImage');
             const downloadBtn = document.getElementById('downloadBtn');
             const newImageBtn = document.getElementById('newImageBtn');
-            const fontStatus = document.getElementById('fontStatus');
-            
-            // Font upload function
-            window.uploadFont = function(input) {
-                if (input.files && input.files[0]) {
-                    const formData = new FormData();
-                    formData.append('font', input.files[0]);
-                    
-                    fontStatus.textContent = 'Uploading font...';
-                    fontStatus.style.color = '#666';
-                    
-                    fetch('/api/upload-font', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            fontStatus.textContent = 'Font uploaded successfully!';
-                            fontStatus.style.color = '#4CAF50';
-                        } else {
-                            fontStatus.textContent = 'Error uploading font: ' + data.error;
-                            fontStatus.style.color = '#f44336';
-                        }
-                    })
-                    .catch(error => {
-                        fontStatus.textContent = 'Error uploading font: ' + error;
-                        fontStatus.style.color = '#f44336';
-                    });
-                }
-            };
             
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
